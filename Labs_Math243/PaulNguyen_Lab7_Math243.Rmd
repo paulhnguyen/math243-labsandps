@@ -1,0 +1,174 @@
+---
+title: 'Lab 7: When a guest arrives they will count how many sides it has on'
+author: "Paul Nguyen"
+date: "11/7/2019"
+output: pdf_document
+---
+
+```{r, message = FALSE}
+library(tree)
+library(dplyr)
+library(randomForest)
+library(ggplot2)
+```
+
+```{r, echo = FALSE, fig.height=4.5, fig.width = 4.8, fig.align='center'}
+set.seed(75)
+n <- 16
+x1 <- runif(n)
+x2 <- runif(n)
+group <- as.factor(sample(1:3, n, replace = TRUE))
+levels(group) <- c("circle", "triangle", "square")
+df <- data.frame(x1, x2, group)
+df[1, 2] <- .765 # tweaks to make a more interesting configuration
+df[9, 1] <- .741
+df <- df[-7, ]
+```
+
+```{r}
+ggplot(df, aes(x = x1, y = x2, col = group, shape = group)) +
+  geom_point(size = 4) +
+  scale_x_continuous(expand = c(0, 0) , limits = c(0, 1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  scale_color_discrete(guide = FALSE) +
+  scale_shape_discrete(guide = FALSE) +
+  theme_bw()
+
+treeshape <- tree(group ~ x1 + x2, data = df, split = "gini")
+summary(treeshape)
+plot(treeshape)
+text(treeshape, pretty = 1)
+
+ggplot(df, aes(x = x1, y = x2, col = group, shape = group)) +
+  geom_point(size = 4) +
+  scale_x_continuous(expand = c(0, 0) , limits = c(0, 1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  scale_color_discrete(guide = FALSE) +
+  scale_shape_discrete(guide = FALSE) +
+  theme_bw() +
+  geom_hline(yintercept = .359) +
+  geom_hline(yintercept = .65)
+  
+```
+
+a) The split decided upon my classification tree was: if x2 < .359, predict circle,
+and if not, then predict square; this is not one of the guesses we would have made
+in class
+b) The reason why the tree splits at this second node is because of GINI's insistence
+of increasing nodal purity. While the model predicts a square in both of the regions,
+in the region with increased nodal purity, it is more certain that the object is a 
+square, and in the other, a wee bit less certain.
+(note, I'm not that there should be a split here.. if you compare the GINI of this
+tree ($\frac{3}{5} *\frac{2}{5} + \frac{2}{5} *\frac{3}{5} + \frac{2}{5} *\frac{3}{5}$)
+vs $\frac{3}{5} *\frac{2}{5} + \frac{4}{10}*\frac{6}{10}$)
+c) $(X_1 = 0.21, X_2 = 0.56)$
+my model would predict that this new observation is a square
+
+
+```{r}
+treeshapedeviance <- tree(group ~ . - group, data = df, split = "deviance")
+plot(treeshapedeviance)
+text(treeshapedeviance, pretty = 2)
+ggplot(df, aes(x = x1, y = x2, col = group, shape = group)) +
+  geom_point(size = 4) +
+  scale_x_continuous(expand = c(0, 0) , limits = c(0, 1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  scale_color_discrete(guide = FALSE) +
+  scale_shape_discrete(guide = FALSE) +
+  theme_bw() +
+  geom_hline(yintercept = .406)
+
+```
+
+This "deviance" tree is different than the "Gini" tree because i think
+that while both value nodal purity, if we decreased the node so that the boundary 
+was drawn at x2 = .359, the cross entropy value, which is similar to the deviance,
+would increase from $-4/6\log{4/6} - 4/9\log{4/9} = .63$ to $-3/5\log{3/5} - 4/10\log{4/10} = .67$
+
+Entropy is less extreme than GINI; it would prefer being right most of the time
+than being really right on one side of the node and then more wrong on the other.
+
+I think that deviance is more sensitive to "outlier" regions, as it multiplies the
+sum of the proportion*logged proportion by 2, so it penalizes regions with low
+nodal purity to a greater extent.
+$-2 \sum_m \sum_k n_{mk} \log \hat{p}_{mk}$
+
+
+
+```{r}
+crime <- read.csv("http://andrewpbray.github.io/data/crime-train.csv") 
+
+dw<-select (crime,-c(state,county,community,communityname,LemasSwornFT,
+ LemasSwFTPerPop,LemasSwFTFieldOps,LemasSwFTFieldPerPop,LemasTotalReq,
+ LemasTotReqPerPop,PolicReqPerOffic,PolicPerPop,RacialMatchCommPol,
+ PctPolicWhite,PctPolicBlack,PctPolicHisp,PctPolicAsian,PctPolicMinor
+ ,OfficAssgnDrugUnits,NumKindsDrugsSeiz,PolicAveOTWorked,LandArea,PopDens,
+ PctUsePubTrans,PolicCars,PolicOperBudg,LemasPctPolicOnPatr,
+ LemasGangUnitDeploy,LemasPctOfficDrugUn,PolicBudgPerPop))
+
+
+crimetree <- tree(ViolentCrimesPerPop ~ . - ViolentCrimesPerPop, data = dw)
+summary(crimetree)
+plot(crimetree)
+text(crimetree, pretty = 3)
+
+
+cv.crimetree <- cv.tree(crimetree)
+plot(cv.crimetree$size, cv.crimetree$dev, type = "b")
+
+prune.crimetree <- prune.tree(crimetree, best = 6)
+plot(prune.crimetree)
+text(prune.crimetree, pretty = 1)
+
+#need to compute test mse
+test_data <- read.csv("https://bit.ly/2PYS8Ap")
+crimehat <- predict(prune.crimetree, newdata = test_data)
+crime.test <- test_data[, "ViolentCrimesPerPop"]
+plot(crimehat, crime.test)
+abline(0,1)
+
+msepruned <- mean((crime.test - crimehat)^2)
+msepruned
+
+
+bag.forest97 <- randomForest(ViolentCrimesPerPop ~ . - ViolentCrimesPerPop, data = dw,
+                             mtry = 96)
+plot(bag.forest97)
+bag.forest97
+bag.forest32 <- randomForest(ViolentCrimesPerPop ~ . - ViolentCrimesPerPop, data = dw,
+                             mtry = 32)
+plot(bag.forest32)
+bag.forest32
+#computing mse's
+yhatbag <- predict(bag.forest97, newdata = test_data)
+plot(yhatbag, crime.test)
+msebag <- mean((crime.test - yhatbag)^2)
+msebag
+
+yhatrandomforest <- predict(bag.forest32, newdata = test_data)
+plot(yhatrandomforest, crime.test)
+mserf<- mean((crime.test - yhatrandomforest)^2)
+mserf
+
+
+varImpPlot(bag.forest97)
+varImpPlot(bag.forest32)
+
+ggplot(data = crime, mapping = aes(x = PctKids2Par, y = PctFam2Par)) + 
+  geom_point(color = "purple", alpha = .7)
+
+```
+
+MSE for pruned tree is .02168
+My MSE for my regression model is ~.01436, so this pruned tree did not beat it.
+My MSE for my bagged tree was super low actually, .00313
+My MSE for my other random forest model with m = p/3 is .0031, barely beating
+out the bagged tree. Both of these bootstrapped trees beat my regression model and
+pruned tree.
+
+I would say that these variable importance plots are pretty similar to what I found 
+in lab 3. Variables in common include: PctKids2Par, PctIlleg, racePctWhite, 
+PctPerDenseHous, MalePctDivorce. The only issue is that I think that these tree 
+models do not distinguish between highly correlated variables which is something
+that my group kept in mind for the linear regression challenge (for example,
+PctKids2Par and PctYoungKids2Par)

@@ -1,0 +1,86 @@
+---
+title: "Activity 3"
+author: "Paul Nguyen"
+date: "10/30/2019"
+output: pdf_document
+---
+
+```{r}
+library(ISLR)
+Default <- Default
+
+
+set.seed(42)
+k <- 2
+
+partition_index2 <- rep(1:k2, each = nrow(Default)/k) %>%
+  sample()
+Misclass2 <- rep(NA, k)
+
+ Default1 <- Default %>%
+    mutate(fold = partition_index)
+  train <- Default1 %>%
+    filter(fold == 1)
+  test <- Default1 %>%
+    filter(fold == 2)
+  predict(model, data = test, type = "response")
+my_log_pred <- ifelse(model$fit < 0.5, "No", "Yes")
+conflog <- table(my_log_pred, test$default)
+conflog
+
+Misclass2[1] <- 1
+
+
+
+k2 <- 2
+for(i in 1:k2) {
+  Default1 <- Default %>%
+    mutate(fold = partition_index)
+  train <- Default1 %>%
+    filter(fold != i)
+  test <- Default1 %>%
+    filter(fold == i)
+  model <- glm(default ~ student + balance + income,
+               data = train,
+               family = "binomial")
+  prediction <- predict(model, data = test, type = "response")
+  my_log_pred <- ifelse(model$fit < .05, "No", "Yes")
+  conflog <- table(my_log_pred, test$default)
+  conflog
+  misclass <- 1-(sum(diag(conflog)) / nrow(test))
+  Misclass2[i] <- misclass
+
+  
+}
+
+
+
+partition_index5 <- rep(1:k5, each = nrow(Default)/k5) %>%
+  sample()
+
+
+k5 <- 5
+misclass5 <- rep(NA, k5)
+
+for(i in 1:k5) {
+  Default1 <- Default %>%
+    mutate(fold = partition_index5)
+  train <- Default1 %>%
+    filter(fold != i)
+  test <- Default1 %>%
+    filter(fold == i)
+  model <- glm(default ~ student + balance + income,
+               data = train,
+               family = "binomial")
+  prediction <- predict(model, data = test, type = "response")
+  my_log_pred <- ifelse(prediction < .05, "No", "Yes")
+  conflog <- table(my_log_pred, test$default)
+  conflog
+  misclass <- 1-(sum(diag(conflog)) / nrow(test))
+  Misclass2[i] <- misclass
+
+  
+}
+
+
+```

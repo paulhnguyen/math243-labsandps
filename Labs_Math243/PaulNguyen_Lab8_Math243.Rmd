@@ -1,0 +1,140 @@
+---
+title: 'Lab 8: Ransom notes keep falling'
+author: "Paul Nguyen"
+date: "11/14/2019"
+output: pdf_document
+---
+
+```{r, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(gbm)
+```
+
+
+```{r}
+lettersdf <- read.csv("https://raw.githubusercontent.com/stat-learning/course-materials/master/data/letters.csv",
+                      header = FALSE)
+set.seed(1)
+train <- sample(1:nrow(lettersdf), nrow(lettersdf) * .75)
+trainingdata <- lettersdf[train,]
+testdata <- lettersdf[-train,]
+
+boost.tree <- gbm(V1 ~ .-V1, data = trainingdata,
+                  distribution = "multinomial",
+                  n.trees = 50,
+                  shrinkage = .1,
+                  interaction.depth = 1)
+summary(boost.tree)
+
+yhat <- predict(boost.tree, newdata = testdata, n.trees = 50, type = "response")
+predicted <- LETTERS[apply(yhat, 1, which.max)]
+
+
+```
+V12 seems to be the most important. (The mean value of the squared horizontal distance
+times the vertical distance for each “on” pixel. This measures the correlation of the
+horizontal variance with the vertical position.)
+
+
+```{r, cached = TRUE}
+confusiontable <- table(predicted, testdata$V1)
+confusiontable
+misclass.rate <- (sum(confusiontable)-sum(diag(confusiontable))) / sum(confusiontable)
+misclass.rate
+lettermisclass.rate <- 
+  (colSums(confusiontable) - diag(confusiontable)) / colSums(confusiontable)
+lettermisclass.rate
+max(lettermisclass.rate)
+```
+misclassification rate is .3142
+highest letter being misclassified is E.
+One pair that the tree found hard to predict was D and B. Also, C and E was not 
+predicted that well either.
+
+```{r, cache = TRUE}
+#even slower tree
+slow.boost <- gbm(V1 ~ .-V1, data = trainingdata,
+                  distribution = "multinomial",
+                  n.trees = 2000,
+                  shrinkage = .01,
+                  interaction.depth = 1)
+summary(slow.boost)
+
+yhatslow <- predict(slow.boost, newdata = testdata, n.trees = 2000, type = "response")
+predictedslow <- LETTERS[apply(yhatslow, 1, which.max)]
+
+slowtable <- table(predictedslow, testdata$V1)
+slowtable
+misclass.rateslow <- 
+  (sum(slowtable) - sum(diag(slowtable))) / sum(slowtable)
+misclass.rateslow
+
+lettermisclass.rateslow <- 
+  (colSums(slowtable) - diag(slowtable)) / colSums(slowtable)
+lettermisclass.rateslow
+
+lettermisclass.rate-lettermisclass.rateslow
+```
+my misclassification rate became better when I slowed down the growth of my tree.
+It seems like my slow model predicts each letter better than my normal boosted tree.
+Some letters that are particularly good are E and H.
+
+
+```{r}
+#back to communities and crime
+crime <- read.csv("http://andrewpbray.github.io/data/crime-train.csv") 
+
+dw<-select (crime,-c(state,county,community,communityname,LemasSwornFT,
+ LemasSwFTPerPop,LemasSwFTFieldOps,LemasSwFTFieldPerPop,LemasTotalReq,
+ LemasTotReqPerPop,PolicReqPerOffic,PolicPerPop,RacialMatchCommPol,
+ PctPolicWhite,PctPolicBlack,PctPolicHisp,PctPolicAsian,PctPolicMinor
+ ,OfficAssgnDrugUnits,NumKindsDrugsSeiz,PolicAveOTWorked,LandArea,PopDens,
+ PctUsePubTrans,PolicCars,PolicOperBudg,LemasPctPolicOnPatr,
+ LemasGangUnitDeploy,LemasPctOfficDrugUn,PolicBudgPerPop))
+
+boosted.crime.tree <- gbm(ViolentCrimesPerPop ~ . - ViolentCrimesPerPop,
+                          data = dw,
+                          distribution = "gaussian",
+                          n.trees = 1000,
+                          shrinkage = .01,
+                          interaction.depth = 1)
+test_datacrime <- read.csv("https://bit.ly/2PYS8Ap")
+yhatcrime <- predict(boosted.crime.tree, newdata = test_datacrime,
+                     n.trees = 1000, type = "response")
+boostedmse <- mean((test_datacrime$ViolentCrimesPerPop - yhatcrime)^2)
+boostedmse
+
+```
+mse for my pruned tree: 0.0216835
+bagged tree: 0.003132427
+random forest:  0.00309084
+my boosted tree's MSE was .01483, which is higher than the rest of my bagged trees.
+It does beat my normal pruned tree though.
+
+
+
+##Problem Set Questions
+Ch 8
+
+5)
+$P(Class is Red| X) = .1, .15, .2, .2, .55, .6, .6, .65, .7, .75$
+Under the majority vote approach, the final classification is: Class is Red,
+since the majority of bootstrapped trees are greater than .5
+When we classify based on average probability, we get 
+P = (.1 + .15 + .2 + .2 + .55 + .6 + .6 + .65 + .7 + .75) / 10 = .45,
+so we would predict Class is not Red
+6)
+To fit a regression tree, first we look at our predictors and make a split down
+one of them, that results in the highest nodal purity by using either the GINI
+index, entropy, deviance, minimizing RSS, or some other metric. We then assign 
+a value to the regions that were split that results in the lowest MSE 
+(if doing a regression),or the majority (if doing a classification), or we can 
+create another split based on nodal purity again. Repeat these steps until 
+stopping criterion, such as each region having 5 observations. This results in
+a top down greedy tree, since we made the splits only considering what would be 
+the best next step and not looking ahead. Then, we can prune the tree by adding
+an $\alpha|T|$ term that punishes trees with many nodes. This gives us a pruned
+tree that is not too complex.
+
+

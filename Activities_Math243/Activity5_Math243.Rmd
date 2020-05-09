@@ -1,0 +1,63 @@
+---
+title: "Activity 5"
+author: "Paul Nguyen"
+date: "12/2/2019"
+output: pdf_document
+---
+```{r}
+library(ggplot2)
+library(ggrepel)
+
+```
+
+
+```{r}
+poverty <- read.delim("https://bitly.com/381pd5e")
+nostate <- poverty[,-1]
+
+twocluster <- kmeans(nostate, centers = 2)$cluster
+threecluster <- kmeans(nostate, centers = 3)$cluster
+fourcluster <- kmeans(nostate, centers = 4)$cluster
+
+pca <- data.frame(prcomp(nostate)$x)
+pca$K2 <- twocluster
+pca$K3 <- threecluster
+pca$K4 <- fourcluster
+
+pca$State <- poverty$State
+
+
+ggplot(data = poverty, mapping = aes(x = Poverty, y = Percent)) +
+  geom_point()
+
+twoclusterplot <- ggplot(data = pca, mapping = aes(x = PC1, y = PC2,
+                                                   color = as.factor(K2),
+                                                   label = State)) +
+  geom_point() +
+  geom_text_repel()
+twoclusterplot
+threeclusterplot <- ggplot(data = pca, mapping = aes(x = PC1, y = PC2,
+                                                     color = as.factor(K3),
+                                                     label = State)) +
+  geom_point() +
+  geom_text_repel()
+threeclusterplot
+fourclusterplot <- ggplot(data = pca, mapping = aes(x = PC1, y = PC2, 
+                                                color = as.factor(K4),
+                                                label = State)) +
+  geom_point() +
+  geom_text_repel()
+fourclusterplot
+
+
+```
+What do the variables mean?
+State- state
+Metropolitan.Residence- percent of population living in urban area
+White- percent of population that is white
+Graduates- percent of population that has graduated high school
+Poverty- percent of population below poverty
+Percent- not sure.. seems to be pretty correlated with poverty, could be percent
+of people that believe they are the below poverty threshold
+
+

@@ -1,0 +1,195 @@
+---
+title: 'Lab 9: Letter Recognition'
+author: "Paul Nguyen"
+date: "11/20/2019"
+output: pdf_document
+---
+```{r, echo = FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+d <- read.csv("https://raw.githubusercontent.com/stat-learning/course-materials/master/data/handwritten.csv")
+
+plot_letter <- function(x, hasletter = TRUE) {
+  if(hasletter) {
+    a <- as.numeric(x[, -1])
+  }else{a <- as.numeric(x)}
+  m <- matrix(a, nrow = 8, byrow = TRUE)
+  m <- t(apply(m, 2, rev)) # rotate matrix
+  par(mar = rep(0, 4))
+  image(m, axes = FALSE, col = rev(grey(seq(0, 1, length = 256)))) #this should be a divergent palette
+  box()
+}
+
+pc_grid <- function(pca, data) {
+  d <- data
+  grid_points <- as.matrix(expand.grid(seq(-1.5, 1.5, length.out = 5), 
+                                       seq(-1.5, 1.5, length.out = 5)))
+  pc_points <- pca$x[, 1:2]
+  nearest_ind <- rep(NA, nrow(grid_points))
+  for(i in 1:nrow(grid_points)) {
+    gp <- matrix(rep(grid_points[i, ], nrow(pc_points)), 
+                 ncol = 2, byrow = TRUE)
+    nearest_ind[i] <- which.min(rowSums((pc_points - gp)^2))
+  }
+  nearest_grid <- data.frame(d[nearest_ind, ])
+  par(mfrow = c(5, 5))
+  regrid <- c(21:25, 16:20, 11:15, 6:10, 1:5)
+  for(i in regrid) {
+    plot_letter(nearest_grid[i, ])
+  }
+}
+```
+
+each column, besides the first, represents a pixel or box, which is represented
+with a 1 if the box is filled in in the actual picture. Each row represents a different
+version of the letter.
+
+```{r}
+letterp <- d %>%
+  filter(letter == "p")
+
+plot_letter(letterp[2,])
+plot_letter(letterp[7,])
+plot_letter(letterp[11,])
+plot_letter(letterp[18,])
+
+
+
+meanvalues <- colMeans(letterp[,-1])
+prow <- letterp[1,]
+prow[,2:65] <- meanvalues
+plot_letter(prow)
+
+
+
+```
+
+
+
+```{r}
+pca <- prcomp(letterp[,-1])
+head(pca$rotation)
+
+d <- as.data.frame(pca$x)
+p1 <- ggplot(d, aes(x = PC1, y = PC2)) +
+  geom_point(size = .5) 
+p1
+
+
+
+d1 <- data.frame(PC = 1:64,
+                PVE = pca$sdev^2 /
+                  sum(pca$sdev^2))
+ggplot(d1, aes(x = PC, y = PVE)) +
+  geom_line() + 
+  geom_point()
+
+
+```
+
+
+
+```{r}
+#work from 11/27
+pc_grid <- function(pca, data) {
+  d <- data
+  grid_points <- as.matrix(expand.grid(seq(-1.5, 1.5, length.out = 5), 
+                                       seq(-1.5, 1.5, length.out = 5)))
+  pc_points <- pca$x[, 1:2]
+  nearest_ind <- rep(NA, nrow(grid_points))
+  for(i in 1:nrow(grid_points)) {
+    gp <- matrix(rep(grid_points[i, ], nrow(pc_points)), 
+                 ncol = 2, byrow = TRUE)
+    nearest_ind[i] <- which.min(rowSums((pc_points - gp)^2))
+  }
+  nearest_grid <- data.frame(d[nearest_ind, ])
+  par(mfrow = c(5, 5))
+  regrid <- c(21:25, 16:20, 11:15, 6:10, 1:5)
+  for(i in regrid) {
+    plot_letter(nearest_grid[i, ])
+  }
+}
+
+pc_grid(pca, letterp)
+
+loading <- pca$rotation
+
+par(mfrow = c(1,1))
+plot_letter(loading[,1], hasletter = FALSE)
+plot_letter(loading[,2], hasletter = FALSE)
+
+
+#reconstructing some letters
+plot_letter(letterp[2,])
+plot_letter(letterp[7,])
+
+m <- 10
+loadings1tom <- loading[,1:m]
+
+zs <-  pca$x 
+zs2 <- zs[2,1:m]
+zs7 <- zs[7,1:m]
+
+reconstructed2 <- meanvalues + zs2%*%t(loadings1tom)
+plot_letter(reconstructed2, hasletter = FALSE)
+reconstructed7 <- meanvalues + zs7 %*% t(loadings1tom)
+plot_letter(reconstructed7, hasletter = FALSE)
+
+
+```
+
+
+
+```{r}
+d <- read.csv("https://raw.githubusercontent.com/stat-learning/course-materials/master/data/handwritten.csv")
+newletter <- d %>%
+  filter(letter == "n")
+
+plot_letter(newletter[2,])
+plot_letter(newletter[7,])
+
+mean = colMeans(newletter[,-1])
+plot_letter(mean, hasletter = FALSE)
+
+npca <- prcomp(newletter[,-1])
+head(npca$rotation)
+
+d <- as.data.frame(npca$x)
+p1 <- ggplot(d, aes(x = PC1, y = PC2)) +
+  geom_point(size = .5) 
+p1
+
+d2 <- data.frame(PC = 1:64,
+                PVE = npca$sdev^2 /
+                  sum(npca$sdev^2))
+ggplot(d2, aes(x = PC, y = PVE)) +
+  geom_line() + 
+  geom_point()
+
+
+pc_grid(npca, newletter)
+
+loadingsforn <- npca$rotation
+
+par(mfrow = c(1,1))
+plot_letter(loadingsforn[,1], hasletter = FALSE)
+plot_letter(loadingsforn[,2], hasletter = FALSE)
+
+#reconstructing n
+plot_letter(newletter[2,])
+plot_letter(newletter[7,])
+
+m <- 60
+loadings1tom <- loadingsforn[,1:m]
+
+zs <-  npca$x 
+zs2 <- zs[2,1:m]
+zs7 <- zs[7,1:m]
+
+reconstructed2n <- mean + zs2%*%t(loadings1tom)
+plot_letter(reconstructed2n, hasletter = FALSE)
+reconstructed7n <- mean + zs7 %*% t(loadings1tom)
+plot_letter(reconstructed7n, hasletter = FALSE)
+```

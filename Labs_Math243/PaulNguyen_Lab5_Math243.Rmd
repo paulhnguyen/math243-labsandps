@@ -1,0 +1,409 @@
+---
+title: "Lab 5: The Sound of Gunfire, Off in the Distance"
+author: "Paul Nguyen"
+date: "10/10/2019"
+output: pdf_document
+---
+#Lab 5
+
+```{r, include = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(MASS)
+library(dplyr)
+```
+
+```{r}
+war <- read.csv("http://www.stat.cmu.edu/~cshalizi/uADA/15/hw/06/ch.csv", 
+                row.names = 1)
+warnona <-war %>%
+  drop_na(war$.)
+  
+mexports <- glm(start ~ exports,
+          data = warnona,
+          family = binomial)
+summary(mexports)$coef
+
+
+mschooling <- glm(start ~ schooling,
+          data = warnona,
+          family = binomial) 
+summary(mschooling)$coef
+if (summary(mschooling)$coef[2,4] < .05) {
+  print(summary(mschooling)$coef[2,4])
+}
+
+
+mgrowth <- glm(start ~ growth,
+          data = warnona,
+          family = binomial)
+summary(mgrowth)$coef
+if (summary(mgrowth)$coef[2,4] < .05) {
+  print(summary(mgrowth)$coef[2,4])
+}
+
+
+mpeace <- glm(start ~ peace,
+          data = warnona,
+          family = binomial)
+summary(mpeace)$coef
+if (summary(mpeace)$coef[2,4] < .05) {
+  print(summary(mpeace)$coef[2,4])
+}
+
+
+mconcentration <- glm(start ~ concentration,
+          data = warnona,
+          family = binomial)
+summary(mconcentration)$coef
+if (summary(mconcentration)$coef[2,4] < .05) {
+  print(summary(mconcentration)$coef[2,4])
+}
+
+
+mlnpop <- glm(start ~ lnpop,
+          data = warnona,
+          family = binomial)
+summary(mlnpop)$coef
+if (summary(mlnpop)$coef[2,4] < .05) {
+  print(summary(mlnpop)$coef[2,4])
+}
+
+
+mfractionalization <- glm(start ~ fractionalization,
+          data = warnona,
+          family = binomial)
+summary(mfractionalization)$coef
+if (summary(mfractionalization)$coef[2,4] < .05) {
+  print(summary(mfractionalization)$coef[2,4])
+}
+
+mdominance <- glm(start ~ warnona[,11],
+          data = warnona,
+          family = binomial)
+summary(mdominance)$coef
+if (summary(mdominance)$coef[2,4] < .05) {
+  print(summary(mdominance)$coef[2,4])
+}
+
+#try to make in one chunk
+#modelvar <- colnames(warnona)
+#odelvar[3]
+
+
+#for (i in 4:11) {
+ # modelvar[i] <- glm(start ~ warnona[,i],
+              #data = warnona,
+               #family = binomial)
+  
+#}
+#this did not work
+```
+
+
+Note: I have now read the instructions more clearly and am now re-doing the
+estimate part now.
+
+```{r}
+finalmod <- glm(start ~ growth +
+                        exports +
+                        fractionalization +
+                        I(exports^2) +
+                        lnpop +
+                        peace +
+                        schooling +
+                        dominance +
+                        concentration,
+                data = war,
+                family = binomial)
+summary(finalmod)$coef
+
+```
+Significant Coefficients(P<.05): growth, exports, fractionalization, exports^2,
+lnpop, peace, schooling, concentration
+
+
+```{r}
+india <- data.frame(war[500,])
+predindia <- predict(finalmod, newdata = india, type = "response")
+predindia
+
+indiaschool <- data.frame(india) %>%
+  mutate(schooling = 66)
+predindiaschool <- predict(finalmod, newdata = indiaschool, type = "response")
+predindiaschool
+
+indiaexportsgdp <- data.frame(india) %>%
+  mutate(exports = india$exports + .1)
+predindiaexports <- predict(finalmod, newdata = indiaexportsgdp, type = "response")
+predindiaexports
+
+```
+model's predicted probability for India in 1975 is .3504199.
+with schooling raised by 30 points, the new probability for India is .17309.
+with exports raised by .1, the new probability for India is .6961378.
+
+    
+
+
+
+```{r}
+nigeria <- data.frame(war[802,])
+prednig <- predict(finalmod, newdata = nigeria, type = "response")
+prednig
+
+nigeriaschool <- data.frame(nigeria) %>%
+  mutate(schooling = nigeria$schooling +30)
+prednigschool <- predict(finalmod, newdata = nigeriaschool, type = "response")
+prednigschool
+
+
+nigeriaexports <- data.frame(nigeria) %>%
+  mutate(exports = nigeria$exports +.1)
+prednigexports <- predict(finalmod, newdata = nigeriaexports, type = "response")
+prednigexports
+
+(prednig - prednigschool) - (predindia - predindiaschool)
+(prednig - prednigexports) - (predindia - predindiaexports)
+
+```
+Under our model, the predicted probability for Nigeria under going civil war is
+.1709917.
+with schooling raised 30 points, new probability is .07410315
+with exports raised by .1, new probability is .3310044
+
+I think that the reason why the differences in the change in probability are 
+different for the two countries, even though I changed each variable by the 
+same amount, is due to the form of the logistic function, which I based my 
+model on. In the log model, the probability is determined by e raised to my
+beta values.
+
+In this problem, India and Nigeria have different values for their respective
+beta terms. If I just add .1 or 30 to a specific beta, even though I add identical
+amounts, the difference is not the same. 
+
+
+
+
+```{r}
+my_log_pred <- ifelse(finalmod$fit < 0.5, "0", "1")
+data.frame(log_pred = my_log_pred[0:5],
+           true = war$start[0:5])
+conflog <- table(my_log_pred, warnona$start)
+conflog
+
+
+zz <- war %>%
+  drop_na(start)
+sum(zz$start)
+nrow(zz) - sum(zz$start)
+nrow(warnona) - sum(warnona$start)
+```
+missclassificationrate = 5 + 43 / 688, .06976744
+if pundit always predicts no war, the pundit will be correct 1089 / 1167 times.
+On my dataset witho no nas, the pundit will be correct 643 / 688 times.
+
+
+
+```{r}
+est <- warnona %>%
+  group_by(start) %>%
+  summarise(n = n(),
+            prop = n/nrow(war),
+            mugrowth = mean(growth),
+            muexports = mean(exports),
+            mufractionalization = mean(fractionalization),
+            muexports2 = mean(exports^2),
+            mulnpop = mean(lnpop),
+            mupeace = mean(peace),
+            muschooling = mean(schooling),
+            mudominance = mean(dominance),
+            muconcentration = mean(concentration),
+            ssxgrowth = var(growth) * (n - 1),
+            ssxexports = var(exports) * (n - 1),
+            ssxfractionalization = var(fractionalization) * (n - 1),
+            ssxexports2 = var(exports^2) * (n - 1),
+            ssxlnpop = var(lnpop) * (n - 1),
+            ssxpeace = var(peace) * (n - 1),
+            ssxschooling = var(schooling) * (n - 1),
+            ssxdominance = var(dominance) * (n - 1),
+            ssxconcentration = var(concentration) * (n - 1)
+            )
+
+pi_n <- pull(est[1,3])
+pi_y <- pull(est[2,3])
+mu_n <- (est[1,4:12])
+mu_y <- (est[2,4:12])
+sigma_sq <- (1/(nrow(warnona) - 2)) * sum(est$ssx)
+
+
+
+#can i use lda, ans: yes
+ldamodel <- lda(start ~ growth +
+                        exports +
+                        fractionalization +
+                        I(exports^2) +
+                        lnpop +
+                        peace +
+                        schooling +
+                        dominance +
+                        concentration,
+                data = warnona)
+ldamodel
+ldapred <- predict(ldamodel, data = warnona)
+lda.class <- ldapred$class
+table(lda.class, warnona$start)
+(40+6)/(636 + 40 +6 +6)
+```
+missclassification rate: .06686047
+
+QDA Model
+```{r}
+qdamodel <- qda(start ~ growth +
+                        exports +
+                        fractionalization +
+                        I(exports^2) +
+                        lnpop +
+                        peace +
+                        schooling +
+                        dominance +
+                        concentration,
+                data = warnona)
+qdamodel
+qdapred <- predict(ldamodel, data = warnona)
+qda.class <- qdapred$class
+table(qda.class, warnona$start)
+```
+missclassification rate: .06686047.
+I would say that the lda and qda misclassification rates are lower because
+they are more flexible models; they predict more parameters than the logistic 
+regression. Since we are only working with training data and not test data, we 
+do not have to worry about overfitting the model. Thus, the more flexible models
+will have the lower misclassification rate.
+
+
+
+#Problem Set
+##Exercise 4
+a. With $p=1$ and $X$ uniformly distributed on [0,1], if we choose to predict a 
+test response using observations that are within 10% the range of $X$ closest to
+the test observation, the average fraction of the available obsercations we will
+use to make the prediction is 1/10.
+b. With $p=2$ features, $X_1$ and $X_2$, and with $(X_1, X_2)$ uniformly 
+distributed on $[0,1] \times [0,1]$. When making a prediction using only 
+observations that are within 10% of range of $X_1$ and $X_2$, we will on average
+only have 1/100 of our available observations to make this prediction
+c. Now with $p=100$ features, and observations uniformly distributed on each
+feature. If we want to predict a test observation using 10% of each features
+range that is closest to that test observation, we will only be using 
+1/(10^100) of our available observations.
+d. The drawback of using KNN when $p$ is very large is that there are very few
+training observations "near" a test observation. As we increase our $p$'s we
+decrease the amount of our observations that fulfil each "p". So when our $p$'s
+become very large, the amount of data that we can use for our prediction is very
+small, and then our model may become very biased with a small amounf of 
+observations. 
+e*.To create a p-dimensional hypercube centered around the test observation that
+contains on average 10% of the training observations, the length of each side
+of the hypercube is going to be .1, assuming that the $X$, the predictor is 
+uniformly distributed on [0,1]
+
+
+
+##Exercise 6
+Variables: $X_1 =$ hours studied, $X_2 =$ undergrad GPA, and Y = receive an A.
+After fitting logistic regression, $\hat{\beta}_0$ = -6, $\hat{\beta}_1 = .05$,
+$\hat{\beta}_2 = 1$.
+a. If a student studies for 40 hours and has a GPA of 3.5, P(getting an A)?
+
+
+$$
+p(X) = \frac{e^{\beta_0 +\beta_{1}X_1 + \beta_{2}X_1}}{1+e^{\beta_0+\beta_{1}X
++\beta_{2}X_2}}
+$$
+
+
+$$
+P(X)= \frac{e^{-6 + (.05 \times 40) + (1 \times 3.5)}}{1+e^{-6+(.05 \times 40) +
+(1*3.5)}}
+$$
+
+```{r}
+e <- exp(1)
+b0 <- -6
+b1 <- .05
+b2 <- 1
+
+probtest <- e^(b0 +(b1*40) +(b2*3.5)) / (1 +e^(b0 +(b1*40) +(b2*3.5)))
+probtest
+
+probtest50 <- (log(1) - b0 - (b2*3.5))/b1
+probtest50
+e^(b0 +(b1*50) +(b2*3.5)) / (1 +e^(b0 +(b1*50) +(b2*3.5)))
+```
+a. The probability of a student with an undergrad GPA of 3.5 and studying for 40 hours getting an A in the test is .3775.
+
+b. This student should study for 50 hours in order to to have a 50% chance of 
+getting an A in the test.
+
+##Exercise 7
+We want to predict if a stock will issue a dividend this year (Yes or No) based
+on X, last year's percent profit. We examine a large number of companies and 
+discover that the mean value of X for companies that issued a dividend (Yes) was
+$\bar{X} = 10$, while the mean for those that didnt was $\bar{X}=0$. The 
+variance of X for these two sets of companies was $\hat{\sigma}^2=36$. 80% of
+companies issued dividends. Assuming X follows a normal distribution, predict
+probability that a company will issue a dividend this year given that its 
+percentage profit was 4 last year.
+Recall that the density function for a normal random variable is 
+$f(x) = \frac{1}{\sqrt{2\pi\sigma^2}}e^{-(x-u)^2/2\sigma^2}$
+Use bayes theorem
+
+$$\bar{X}_Y = 10$$
+
+$$\bar{X}_N = 0$$
+
+$$\hat{\sigma}^2=36$$
+
+$$\hat{\pi}_Y = .8$$
+
+$$\hat{\pi}_N = .2$$
+
+$$X=4$$
+
+$$f_Y(x) = \frac{1}{\sqrt{2\times(.8*36)}}e^{-(4-10)^2/2(36)^2}$$
+
+$$f_N(x) = \frac{1}{\sqrt{2\times(.2*36)}}e^{-(4-0)^2/2(36)^2}$$
+    
+
+
+\begin{align}
+P(Y="yes" | X = 4) &= 
+\frac{f_Y(x)\pi_Y}{f_Y(x)\pi_Y + f_N(x)\pi_N} \\
+P(Y="yes" | X = 4) &= 
+\frac{\frac{1}{\sqrt{2\times(.8*36)}}e^{-(4-10)^2/2(36)^2}*.8}{(
+\frac{1}{\sqrt{2\times(.8*36)}}e^{-(4-10)^2/2(36)^2}*.8) +
+(\frac{1}{\sqrt{2\times(.2*36)}}e^{-(4-0)^2/2(36)^2}*.2)}
+\end{align}
+
+
+
+```{r}
+uy <- 10
+un <- 0
+piy <- .8
+pin <- .2
+sigma2 <- 36
+x <- 4
+
+f_ywp <- (exp(-(x-uy)^2/(2*sigma2)))/ sqrt(2*piy*sigma2)
+f_nwp <- (exp(-(x-un)^2/(2*sigma2)))/ sqrt(2*pin*sigma2)
+
+probdividend <- f_ywp / (f_ywp + f_nwp)
+probnodividend <- f_nwp / (f_ywp + f_nwp)
+probdividend 
+probnodividend
+```
+
+Probability that this company will issue a dividend : .4
+

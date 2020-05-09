@@ -1,0 +1,698 @@
+---
+title: "Lab 4: Regression Competition"
+subtitle: "One last time through the hot New Jersey night…"
+author: "Paul Nguyen"
+output: pdf_document
+---
+
+
+### group_F_process
+We eliminate undesired variables and also automatically generate a new dataframe with all the variables squared and cubic(ed).
+
+### group_F_automatic
+We run regsubsets on the dataframe and generate a lm object automatically, no need of manually checking and writing the LM.
+
+```{r, message=FALSE}
+library(tidyverse)
+library(leaps)
+
+d <- read.csv("http://andrewpbray.github.io/data/crime-train.csv")
+
+# Data wrangling
+group_F_process <- function(training_data) {
+  dw<-as_tibble(training_data)
+  dw<-select (training_data,-c(state,county,community,communityname,LemasSwornFT,LemasSwFTPerPop,LemasSwFTFieldOps,LemasSwFTFieldPerPop,LemasTotalReq,LemasTotReqPerPop,PolicReqPerOffic,PolicPerPop,RacialMatchCommPol,PctPolicWhite,PctPolicBlack,PctPolicHisp,PctPolicAsian,PctPolicMinor,OfficAssgnDrugUnits,NumKindsDrugsSeiz,PolicAveOTWorked,LandArea,PopDens,PctUsePubTrans,PolicCars,PolicOperBudg,LemasPctPolicOnPatr,LemasGangUnitDeploy,LemasPctOfficDrugUn,PolicBudgPerPop))
+  vars<-c()
+  for (i in 1:(length(dw)-1)) {
+    vars<- c(vars, names(dw)[i])
+  }
+  sqrd<-data.frame(lapply(vars, function(x){dw[,x]^(1/2)}))
+  cubc<-data.frame(lapply(vars, function(x){dw[,x]^(1/3)}))
+  names(sqrd)<-paste0(vars, "Sq")
+  names(cubc)<-paste0(vars, "Cub")
+  dw<-cbind(dw, sqrd,cubc)
+  return(dw)
+}
+
+# Manually fits model
+group_F_fit <- function(training_data) {
+  m1 <- lm(ViolentCrimesPerPop~
+             MalePctDivorceCub+
+             PctKids2ParCub+
+             PctIlleg+
+             PctPersDenseHousSq+
+             RentLowQ+
+             MedRent, 
+           training_data)
+  m1
+}
+
+# Gets MSE
+group_F_MSE <- function(model, data) {
+  mean((data$ViolentCrimesPerPop - predict.lm(model, data)) ^ 2)
+}
+
+# Automatically fits model
+group_F_automated_fit <- function(data, met) {
+  leaps<-regsubsets(ViolentCrimesPerPop~.,
+                    data = data,
+                    nvmax = 70,
+                    method = met)
+  best<-summary(leaps)$which[which.max(summary(leaps)$adjr2),]
+  variables <- c()
+  for (i in 2:length(best)) {
+    if (best[i] == TRUE) {
+      variables <- c(variables, names(best)[i])
+    }
+  }
+  vars<- paste(variables, collapse = "+")
+  formula<- paste("lm(ViolentCrimesPerPop ~ ",vars,", data =", deparse(substitute(data)),")")
+  m1<-eval(parse(text=formula))
+  return(m1)
+}
+
+dw <- group_F_process(d)
+bestF <- group_F_automated_fit(dw, "forward")
+bestB <- group_F_automated_fit(dw, "backward")
+
+MSE_F <- group_F_MSE(bestF, dw)
+MSE_B <- group_F_MSE(bestB, dw)
+```
+
+looks like backward is the better way to go 
+
+
+
+###Problem Set
+2.
+  a. The lasso, relative to least squares, is less flexible so that it it reduces
+bias when there is collinearity in the data. It will give improved prediction
+accuracy when its increase in bias is less that its decrease in variance
+
+  b. Similarly to the lasso, the ridge regression is less flexible than the least
+squares method so that it provides more stability to the model. It will give
+improved predictino accuracy when its increase in bias is less thatn its
+decrease in variance.
+
+3.
+Suppose we estimate the regression coefficients in a linear regression model by
+minimizing $\sum_{i=1}^n (y_i - \beta_0 - \sum{_{j=1}^p \beta_jx_{ij}})^2$ 
+subject to $\sum_{j=1}^p |\beta_j| \leq s$
+  (a) Note that increasing s means that our coefficients become larger and
+  larger... they are less constrained. This means that the model will fit to the
+  training data increasingly well. thus, as we increase $s$ from 0, the training
+  RSS will steadily decrease.
+  (b) I think that a similar reasoning can be applied to Test RSS. At $s = 0$, 
+  the model is just $B_0 =$ mean of the data. As we increase $s$, the model 
+  becomes more and more complex, until $s$ becomes large enough that it encompasses
+  $\hat{\beta}$ where $\hat{\beta}$ is the least sum of squares model. If our test
+  data is simlar to our training data, test RSS should decrease as we increase $s$.
+  However,  I believe that the model may become too complex, and so Test RSS may
+  eventually start decreasing when we start overfitting our data.
+  (c) For variance, we can think about this as model complexity. When $s = 0$,
+  there is no variance. The beta terms are just 0. As we increase s (this is 
+  equivalent to decreasing $\lambda$ in the lasso function), the beta terms start
+  emerging, and variance should start to steadily increase.
+  (d) For squared bias, when $s = 0$, bias here is super big. Then when we 
+  increase s, we start to add model complexity and so bias just starts to decrease.
+  (e) I think here irreducible error remains constant. S really only affects the
+  beta terms, which estimate y. However, irreducible error comes from the data
+  not being perfect and having a little bit of jitter no matter what level we
+  set s to.
+4.
+Suppose we estimate the regression coefficients in a linear regression model by
+minimizing $\sum_{i=1}^n (y_i - \beta_0 - \sum{_{j=1}^p \beta_jx_{ij}})^2 + \lambda\sum_{j=1}^p \beta_j^2$
+  (a) Here, this is a ridge regression whose complexity starts at the least
+  squares method and then decreases as $\lambda$ increases. Thus, when we increase
+  $\lambda$ from 0, the training RSS will decrease pretty steadily. The training
+  RSS would have been the highest at $\lambda = 0$.
+  (b) When we repeat for test RSS, I believe that the test RSS will decrease and
+  then eventually start increasing. My reasoning: At $\lambda = 0$, this is 
+  equivalent to the least squares solution.. it may be needlessly complex. When
+  we increase lambda, we start punishing for needless predictors, which will bring
+  our test RSS down. However, when lambda becomes too high, then having any 
+  predictors at all will punish our model, and then our bias is overpowering any
+  decreases in variance that we brought.
+  (c) Increasing lambda decreases our model complexity. Thus, our variance will
+  steadily decrease.
+  (d) Squared Bias will steadily increase as we increase lambda. We decrease 
+  model complexity in exchange for introducing bias to our model.
+  (e) Again, irreducible error will remain constant. It is not affected by our
+  model predictors.
+
+5. 
+given: $n=2, p = 2, x_{11} = x_{12}$ suppose that $y_1 +y_2 = 0, x_{12} +x_{21}=0$
+so that the estimate for the intercept for a ridge regression, lasso, or least
+squares is 0. $\hat\beta_0=0$
+(a) for ridge regression, minimize 
+$\sum_{j=1}^p(y_i-\beta_j)^2 + \lambda\sum_{j=1}^p\beta_j^2$
+$((y_1-\beta_1)^2+(y_2-\beta_2)^2) + ((\lambda\beta_1)^2+(\lambda\beta_2)^2)$
+(b) in this setting, ridge regression estimates take the form:
+$\hat\beta_j^R = y_j/(1+\lambda)$ 
+(note talk to andrew about this)
+(c) for lasso, minimize
+$\sum_{j=1}^p(y_i-\beta_j)^2 + \lambda\sum_{j=1}^p|\beta_j|$
+$((y_1-\beta_1)^2+(y_2-\beta_2)^2) + (\lambda|\beta_1| + \lambda|\beta_2|)$
+(d) lasso estimates:
+
+
+$$\hat\beta_2 = y_2 - \lambda/2 \implies \hat\beta_2 = -y_1 - \lambda/2 $$
+$$\hat\beta_1 \ne \hat\beta_2$$
+$$y_1 > \lambda/2 \implies y_2 < \lambda/2$$
+$$\hat\beta_1 = y_1 - \lambda/2$$
+$$\hat\beta_2 = y_2 + \lambda/2 \implies \hat\beta_2 = -y_1 + \lambda/2 $$
+Again, $$\hat\beta_1 \ne \hat\beta_2$$
+
+
+
+6.
+(a) For some $y_1$ and $\lambda > 0$, plot 6.12 as a function of $\beta_1$
+Let $y_1 = 2$ and $\lambda =1$
+```{r}
+y1 <- 2
+lambda <-1
+B1 <- seq(from = -10, to = 10, by = .01)
+functionB1r <- (y1)^2 -2*y1*B1  + B1^2+ lambda*B1^2
+functionB1r2 <- (y1-B1)^2 + lambda*(B1^2)
+min(functionB1r)
+min(functionB1r2)
+
+df <- data.frame(B1 = B1, functionB1r = functionB1r)
+ggplot(data = df, mapping = aes(x = B1, y = functionB1r)) +
+  geom_line() +
+  geom_line(mapping = aes(x = y1/(lambda+1))) 
+  
+
+```
+note: $\sum_{j=1}^p(y_i-\beta_j)^2 + \lambda\sum_{j=1}^p\beta_j^2$ represented
+  by line, and line represents $\beta_1^r = y_1/(1+\lambda)$. $B_1$ is at min 
+  of function
+
+(b)
+plot 6.13 as a function of $\beta_1$
+```{r}
+B1 <- seq(from = -3, to = 6, by = .01)
+functionB1l <- (y1)^2 -2*y1*B1 + B1^2 + abs(B1)
+bayarea <- (y1 - B1)^2 + lambda*abs(B1)
+min(bayarea)
+min(functionB1l)
+
+dfl <- data.frame(B1 = B1, functionB1l = functionB1l)
+ggplot(data = dfl, mapping = aes(x = B1, y = functionB1l)) +
+  geom_line(col = "purple2") +
+  geom_line(mapping = aes(x = (y1 - (lambda/2))))
+
+dfltest <- data.frame(B1 = B1, bayarea = bayarea)
+ggplot(data = dfltest, mapping = aes(x = B1, y = bayarea)) +
+  geom_line(col = "purple2") +
+  geom_line(mapping = aes( x = (y1 - (lambda/2))))
+
+```
+
+
+#Additional Exercise
+Using the glmnet package, construct a ridge regression and LASSO model to predict violent crime in the training data set. A description for how to use this package can be found in your book on pages 251 - 255.
+
+    How many variables were selected by the LASSO?
+    What are the training MSEs for ridge and LASSO using the optimal value of (\lambda)?
+    If the MSEs differed, why do you think one is higher than the other in this setting?
+
+```{r, cached = T}
+library(glmnet)
+grid <- 10^seq(10,-2, length =100)
+xx <- model.matrix(ViolentCrimesPerPop ~., dw)[,-1] 
+yy = dw$ViolentCrimesPerPop
+ridge.mod = glmnet(x = xx, y = yy, alpha = 0, 
+                   lambda = grid)
+dim(coef(ridge.mod))
+set.seed(11)
+train <- sample(1:nrow(xx), nrow(xx)/2)
+test <- (-train)
+yy.test = yy[test]
+cvoutr <- cv.glmnet(xx[train,], yy[train], alpha =0) 
+plot(cvoutr)
+bestlamr <- cvoutr$lambda.min
+bestlamr
+ridgepred = predict(ridge.mod, s = bestlamr, newx = xx[test,]) 
+testmseridge <- mean((ridgepred - yy.test)^2)
+testmseridge
+
+#now for lasso
+lasso.mod = glmnet(x = xx, y = yy, alpha = 1, 
+                   lambda = grid)
+dim(coef(lasso.mod))
+set.seed(11)
+cvoutlasso <- cv.glmnet(xx[train,], yy[train], alpha =1) 
+plot(cvoutlasso)
+bestlamlasso <- cvoutlasso$lambda.min
+bestlamlasso
+lassopred = predict(lasso.mod, s = bestlamr, newx = xx[test,]) 
+testmselasso <- mean((lassopred - yy.test)^2)
+testmselasso
+lassocoeff = predict(lasso.mod, type = "coefficients", s = bestlamlasso)
+lassocoeff[lassocoeff != 0]
+
+```
+18 variables for lasso model.
+mse for ridge:.01849; mse for lasso: .0586
+My guess for why the test MSE's differed was because the best lambda for lasso 
+ended up being super small when compared to the lambda for ridge. This means that
+my lasso model ended up being more complex than the ridge model. Also, the lasso
+model should have eliminated any needless predictors, so since it was more complex,
+tried modeling the data more closely compared to the ridge model. However, it may
+have still been overfitting the test data, which could explain the higher test mse.
+
+``` {r, include = F}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)  
+d <- read.csv("http://andrewpbray.github.io/data/crime-train.csv")
+
+
+```
+
+```{r}
+group_F_automated_fit <- function(training_data){
+  mb <- lm(ViolentCrimesPerPop ~ population + 
+             racePctWhite + 
+             agePct12t29 +
+             numbUrban +
+             medIncome +
+             PctEmploy +
+             pctWSocSec +
+             medFamInc +
+             whitePerCap +
+             PctEmploy +
+             MalePctDivorce +
+             MalePctNevMarr +
+             PctWorkMom +
+             PctIlleg +
+             PctImmigRec5 +
+             PctImmigRec8 +
+             PersPerOccupHous +
+             PctHousLess3BR +
+             PctVacantBoarded +
+             PctHousOccup +
+             PctVacMore6Mos +
+             RentLowQ +
+             MedRent +
+             MedOwnCostPctIncNoMtg +
+             NumStreet,
+           training_data)
+  mb
+}
+
+```
+
+```{r}
+group_F_process <- function(data){
+  data %>%
+    mutate(T_MPD = MalePctDivorce^(1/3),
+           T_PK2P = PctKids2Par^(1/3),
+           T_PPDH = PctPersDenseHous^2)
+}
+
+
+group_F_fit2.0 <- function(training_data) {
+  m1 <- lm(ViolentCrimesPerPop ~  T_MPD + T_PK2P +
+             PctIlleg + T_PPDH + RentLowQ+MedRent, training_data)
+  m1
+}
+
+
+
+```
+
+
+```{r}
+group_F_fit <- function(training_data) {
+  m1 <- lm(ViolentCrimesPerPop~ I(MalePctDivorce^(1/3)) + I(PctKids2Par^(1/3)) +
+             PctIlleg + (PctPersDenseHous^2) + RentLowQ+MedRent, training_data)
+  m1
+}
+
+
+
+```
+
+```{r}
+group_F_MSE <- function(model, data) {
+  MSE<-mean((data$ViolentCrimesPerPop - predict.lm(model, data)) ^ 2)
+  return (MSE)
+}
+
+```
+
+
+```{r}
+library(leaps)
+#forward
+regsubsets(ViolentCrimesPerPop ~ population + 
+             householdsize +
+             racepctblack + 
+             racePctWhite + 
+             racePctAsian + 
+             racePctHisp + 
+             agePct12t21 + 
+             agePct12t29 + 
+             agePct16t24 + 
+             agePct65up + 
+             numbUrban + 
+             pctUrban + 
+             medIncome + 
+             pctWWage +
+             pctWFarmSelf + 
+             pctWInvInc + 
+             pctWSocSec + 
+             pctWPubAsst + 
+             pctWRetire + 
+             medFamInc + 
+             perCapInc + 
+             whitePerCap + 
+             blackPerCap + 
+             indianPerCap + 
+             AsianPerCap + 
+             OtherPerCap + 
+             HispPerCap + 
+             NumUnderPov + 
+             PctPopUnderPov + 
+             PctLess9thGrade + 
+             PctNotHSGrad + 
+             PctBSorMore + 
+             PctUnemployed + 
+             PctEmploy + 
+             PctEmplManu + 
+             PctEmplProfServ + 
+             PctOccupManu +
+             PctOccupMgmtProf +
+             MalePctDivorce + 
+             MalePctNevMarr + 
+             FemalePctDiv + 
+             TotalPctDiv + 
+             PersPerFam + 
+             PctFam2Par + 
+             PctKids2Par +
+             PctYoungKids2Par + 
+             PctTeen2Par + 
+             PctWorkMomYoungKids + 
+             PctWorkMom + 
+             NumIlleg + 
+             PctIlleg + 
+             NumImmig + 
+             PctImmigRecent + 
+             PctImmigRec5 + 
+             PctImmigRec8 + 
+             PctImmigRec10 + 
+             PctRecentImmig + 
+             PctRecImmig5 + 
+             PctRecImmig8 + 
+             PctRecImmig10 + 
+             PctSpeakEnglOnly +
+             PctNotSpeakEnglWell +
+             PctLargHouseFam + 
+             PctLargHouseOccup +
+             PersPerOccupHous + 
+             PersPerOwnOccHous + 
+             PersPerRentOccHous +
+             PctPersOwnOccup + 
+             PctPersDenseHous + 
+             PctHousLess3BR +
+             MedNumBR + 
+             HousVacant + 
+             PctHousOccup + 
+             PctHousOwnOcc +
+             PctVacantBoarded +
+             PctVacMore6Mos + 
+             MedYrHousBuilt + 
+             PctHousNoPhone + 
+             PctWOFullPlumb +
+             OwnOccLowQuart +
+             OwnOccMedVal + 
+             OwnOccHiQuart + 
+             RentLowQ + 
+             RentMedian + 
+             RentHighQ +
+             MedRent + 
+             MedRentPctHousInc +
+             MedOwnCostPctInc +
+             MedOwnCostPctIncNoMtg +
+             NumInShelters + 
+             NumStreet + 
+             PctForeignBorn + 
+             PctBornSameState + 
+             PctSameHouse85 + 
+             PctSameCity85 + 
+             PctSameState85,
+           data = d, nvmax = 25, method = "forward") 
+
+
+forwardmodelfit <- function(training_data){
+  mf <- lm(ViolentCrimesPerPop ~ NumStreet +
+             MedOwnCostPctIncNoMtg +
+             MedRentPctHousInc +
+             MedRent +
+             RentLowQ +
+             PctHousNoPhone +
+             PctVacMore6Mos +
+             PctVacantBoarded +
+             PctHousOccup +
+             PctImmigRec10 +
+             PctImmigRec8 +
+             PctImmigRec5 +
+             PctIlleg +
+             PctWorkMom +
+             FemalePctDiv +
+             MalePctDivorce +
+             PctEmplProfServ +
+             PctEmploy +
+             PctNotHSGrad +
+             PctLess9thGrade +
+             indianPerCap +
+             pctWSocSec +
+             pctUrban +
+             racePctHisp +
+             racePctWhite, 
+           training_data)
+  mf
+}
+group_F_MSE(forwardmodelfit(d), d)
+
+backwardmodelfit <- function(training_data){
+  mb <- lm(ViolentCrimesPerPop ~ population + 
+             racePctWhite + 
+             agePct12t29 +
+             numbUrban +
+             medIncome +
+             PctEmploy +
+             pctWSocSec +
+             medFamInc +
+             whitePerCap +
+             PctEmploy +
+             MalePctDivorce +
+             MalePctNevMarr +
+             PctWorkMom +
+             PctIlleg +
+             PctImmigRec5 +
+             PctImmigRec8 +
+             PersPerOccupHous +
+             PctHousLess3BR +
+             PctVacantBoarded +
+             PctHousOccup +
+             PctVacMore6Mos +
+             RentLowQ +
+             MedRent +
+             MedOwnCostPctIncNoMtg +
+             NumStreet,
+           training_data)
+  mb
+}
+group_F_MSE(backwardmodelfit(d), d)
+
+group_F_MSE(group_F_fit2.0(group_F_process(d)), group_F_process(d))
+
+summary(forwardmodelfit(d))
+summary(backwardmodelfit(d))
+```
+
+```{r}
+#Data Exploration
+
+d <- read.csv("http://andrewpbray.github.io/data/crime-train.csv")
+
+
+
+#maybe
+ggplot(data = d, mapping = aes(x = householdsize, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+#ok
+ggplot(data = d, mapping = aes(x = PctUnemployed, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+#ok
+ggplot(data = d, mapping = aes(x = medIncome, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+#ok
+ggplot(data = d, mapping = aes(x = PctPopUnderPov, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+#ok
+ggplot(data = d, mapping = aes(x = PctNotHSGrad, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+#ok
+ggplot(data = d, mapping = aes(x = PctKids2Par, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+ggplot(data = d, mapping = aes(x = LemasPctOfficDrugUn, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+ggplot(data = d, mapping = aes(x = NumStreet, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) 
+
+
+cor(d$PctKids2Par, d$PctNotHSGrad) #-.697
+cor(d$PctKids2Par, d$PctPopUnderPov) #-.771
+cor(d$PctKids2Par, d$medIncome) #.712
+cor(d$PctKids2Par, d$PctUnemployed) #-.698
+
+cor(d$ViolentCrimesPerPop, d$PctPopUnderPov) #.538
+cor(d$ViolentCrimesPerPop, d$medIncome) #-.414
+cor(d$ViolentCrimesPerPop, d$PctFam2Par) #-.705
+cor(d$ViolentCrimesPerPop, d$householdsize) #-0.386
+cor(d$ViolentCrimesPerPop, d$PctUnemployed) #.537
+cor(d$ViolentCrimesPerPop, d$PctNotHSGrad) #.5157
+
+
+
+cor(d$PctUnemployed, d$PctPopUnderPov) #.7839
+
+
+#r2
+modelkd <- lm(ViolentCrimesPerPop ~ PctKids2Par + PctPopUnderPov, d)
+summary(modelkd)
+
+
+#r2 = .5656
+model1 <- lm(ViolentCrimesPerPop ~ PctKids2Par, data = d)
+par (mfrow =  c(2,2))
+plot(model1)
+summary(model1)
+
+
+
+
+ggplot(data = d, mapping = aes(x = racePctWhite, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) + geom_smooth()
+
+ggplot(data = d, mapping = aes(x = pctUrban, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5)
+
+ggplot(data = d, mapping = aes(x = MalePctDivorce, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+ggplot(data = d, mapping = aes(x = PctKids2Par, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+ggplot(data = d, mapping = aes(x = PctIlleg, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+ggplot(data = d, mapping = aes(x = PctPersDenseHous, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+ggplot(data = d, mapping = aes(x = PctHousOwnOcc, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+
+ggplot(data = d, mapping = aes(x = NumStreet, y = ViolentCrimesPerPop)) +
+  geom_point(alpha = .5) +
+  geom_smooth()
+
+#I(MalePctDivorce^(1/3))+I(PctKids2Par^(1/3)) + PctIlleg+(PctPersDenseHous^2) + RentLowQ+MedRent+NumStreet
+```
+
+
+
+
+
+
+```{r}
+library(tidyverse)
+library(leaps)
+
+d <- read.csv("http://andrewpbray.github.io/data/crime-train.csv")
+
+# Data wrangling
+group_F_process <- function(training_data) {
+  dw<-as_tibble(training_data) %>%
+    mutate(
+           MalePctDivorceCub = I(MalePctDivorce^(1/3)),
+           PctKids2ParCub = I(PctKids2Par^(1/3)),
+           PctPersDenseHousSq = PctPersDenseHous^2
+           )
+  dw<-select (d,-c(state,county,community,communityname,LemasSwornFT,LemasSwFTPerPop,LemasSwFTFieldOps,LemasSwFTFieldPerPop,LemasTotalReq,LemasTotReqPerPop,PolicReqPerOffic,PolicPerPop,RacialMatchCommPol,PctPolicWhite,PctPolicBlack,PctPolicHisp,PctPolicAsian,PctPolicMinor,OfficAssgnDrugUnits,NumKindsDrugsSeiz,PolicAveOTWorked,LandArea,PopDens,PctUsePubTrans,PolicCars,PolicOperBudg,LemasPctPolicOnPatr,LemasGangUnitDeploy,LemasPctOfficDrugUn,PolicBudgPerPop))
+  vars<-c()
+  for (i in 1:(length(dw)-1)) {
+    vars<- c(vars, names(dw)[i])
+  }
+  sqrd<-data.frame(lapply(vars, function(x){dw[,x]^(1/2)}))
+  cubc<-data.frame(lapply(vars, function(x){dw[,x]^(1/3)}))
+  names(sqrd)<-paste0(vars, "Sq")
+  names(cubc)<-paste0(vars, "Cub")
+  dw<-cbind(dw, sqrd,cubc)
+  return(dw)
+}
+
+# Manually fits model
+group_F_fit <- function(training_data) {
+ m1 <- lm(ViolentCrimesPerPop~
+            MalePctDivorceCub+
+            PctKids2ParCub+
+            PctIlleg+
+            PctPersDenseHousSq+
+            RentLowQ+
+            MedRent,
+          training_data)
+ m1
+}
+
+# Gets MSE
+group_F_MSE <- function(model, data) {
+  mean((data$ViolentCrimesPerPop - predict.lm(model, data)) ^ 2)
+}
+
+# Automatically fits model
+group_F_automated_fit <- function(data, method) {
+  leaps<-regsubsets(ViolentCrimesPerPop~.,
+                    data = data,
+                    nvmax = 25,
+                    method = method)
+  best<-summary(leaps)$which[which.max(summary(leaps)$adjr2),]
+  variables <- c()
+  for (i in 2:length(best)) {
+    if (best[i] == TRUE) {
+      variables <- c(variables, names(best)[i])
+    }
+  }
+  vars<- paste(variables, collapse = "+")
+  formula<- paste("lm(ViolentCrimesPerPop ~ ",vars,", data = dw)") # not able to get dataframe name as string
+  m1<-eval(parse(text=formula))
+  return(m1)
+}
+
+dw <- group_F_process(d)
+bestF <- group_F_automated_fit(dw, "forward")
+bestB <- group_F_automated_fit(dw, "backward")
+
+MSE_F <- group_F_MSE(bestF, dw)
+MSE_B <- group_F_MSE(bestB, dw)
+```
+
+
